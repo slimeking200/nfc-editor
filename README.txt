@@ -1,18 +1,18 @@
-NFC Writer PWA
-==============
+# NFC Editor • PWA (with Install button)
 
-How to run:
------------
-1. Unzip this package.
-2. On desktop, run a local server in the unzipped folder:
-   - Example: `python -m http.server 8000`
-3. On your Android phone (same Wi-Fi), open Chrome and visit:
-   - http://<your-desktop-IP>:8000/
-4. You'll see NFC Writer app. Use buttons to Read, Write, or Lock tags.
-5. Install it as a PWA (Add to Home Screen).
+This bundle is ready for **HTTPS hosting** (GitHub Pages / Netlify / Vercel) or **localhost**. It includes a manual **Install** button using the `beforeinstallprompt` event.
 
-Notes:
-------
-- Works only in Chrome on Android.
-- NFC requires HTTPS or localhost, so direct file:/// won't work.
-- Tag locking (Make Read-Only) is experimental. Use NXP TagWriter for reliable locking.
+## How to deploy on GitHub Pages
+1. Create a repo (public).
+2. Upload all files in this folder.
+3. Repo Settings → Pages → Source: `main` branch, root (`/`).
+4. Open: `https://<your-username>.github.io/<repo>/` (HTTPS).
+
+## Use
+- Open the site in **Chrome on Android**.
+- Tap **Install App** when the button enables (depends on `beforeinstallprompt`). 
+- Paste or load your JSON, choose MIME/Text, then **Write to Tag** or **Read Tag**.
+
+## Notes
+- Web NFC requires **HTTPS or `http://localhost`**.
+- `makeReadOnly()` is experimental; if it fails, lock with NXP TagWriter/NFC Tools.

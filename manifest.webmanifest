@@ -1,20 +1,14 @@
 {
-  "name": "NFC Writer PWA",
-  "short_name": "NFCWriter",
+  "name": "NFC Editor",
+  "short_name": "NFC Editor",
+  "description": "Write/read JSON (NDEF) to NFC tags with Web NFC. Includes manual Install button.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "description": "A simple NFC writer and reader PWA",
+  "background_color": "#0f1420",
+  "theme_color": "#0f1420",
   "icons": [
-    {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
