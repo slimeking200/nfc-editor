@@ -1,203 +1,672 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>NFC Editor • PWA</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#0f1420">
-  <style>
-    :root { --bg:#0b0f14; --panel:#121827; --ink:#eaf0fb; --muted:#9fb0c8; --line:#1f293b; --ok:#7bffb5; --bad:#ff7a7a; --warn:#ffd36c; }
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial}
-    header{padding:14px 16px;border-bottom:1px solid var(--line);background:#0f1420;position:sticky;top:0;z-index:2}
-    h1{margin:0;font-size:18px}
-    main{max-width:880px;margin:16px auto;padding:0 12px}
-    section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
-    label{font-size:12px;color:var(--muted);display:block;margin:6px 0 4px}
-    textarea,input,select,button{width:100%;box-sizing:border-box;background:#0e1421;color:var(--ink);border:1px solid #2a3650;border-radius:10px;padding:10px;font-size:14px}
-    button{cursor:pointer;background:#14223a}
-    button.primary{background:linear-gradient(180deg,#214062,#193556);border-color:#2e4b72}
-    .row{display:flex;gap:8px;flex-wrap:wrap}
-    .row>*{flex:1 1 220px}
-    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
-    .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px;color:var(--muted)}
-    .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
-    .muted{color:var(--muted)}
-    pre{white-space:pre-wrap}
-    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fossil Diggers — Base Game</title>
+<style>
+  :root { --bg:#0b0f14; --panel:#121827; --ink:#eaf0fb; --muted:#9fb0c8; --line:#23324a; --accent:#7bffb5; --bad:#ff7a7a; --gold:#ffd36c; }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial}
+  header{padding:14px 16px;border-bottom:1px solid var(--line);background:#0f1420;position:sticky;top:0;z-index:2}
+  h1{margin:0;font-size:18px}
+  main{max-width:980px;margin:16px auto;padding:0 12px;display:grid;gap:12px;grid-template-columns: 1.1fr 1fr}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+  h2{margin:0 0 8px 0;font-size:16px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px;color:var(--muted)}
+  button{background:#13233a;color:var(--ink);border:1px solid #2a3a56;border-radius:10px;padding:10px 12px;cursor:pointer}
+  button.primary{background:linear-gradient(180deg,#234a6a,#183955);border-color:#2e557f}
+  button:disabled{opacity:.6;cursor:not-allowed}
+  input,select,textarea{background:#0e1624;color:var(--ink);border:1px solid #2a3a56;border-radius:10px;padding:8px}
+  .money{font-weight:700;color:var(--accent)}
+  .muted{color:var(--muted)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .list{display:flex;flex-direction:column;gap:8px}
+  .card{border:1px solid var(--line);border-radius:12px;padding:10px;background:#0f1828}
+  .rightcol{display:flex;flex-direction:column;gap:12px}
+  .found{color:var(--accent)}
+  .warn{color:var(--gold)}
+  .bad{color:var(--bad)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .small{font-size:12px}
+  details summary{cursor:pointer}
+</style>
 </head>
 <body>
 <header>
-  <h1>NFC Editor • PWA</h1>
-  <div id="support" class="pill" style="margin-top:8px"></div>
+  <h1>Fossil Diggers — Base Game</h1>
+  <div id="support" class="pill" style="margin-top:6px"></div>
 </header>
 
 <main>
+  <!-- Left: Play panel -->
   <section>
-    <h2>Install</h2>
-    <div class="toolbar">
-      <button id="btn-install" class="primary" disabled>Install App</button>
-      <button id="btn-a2hs-help">How to Install (iOS/others)</button>
+    <h2>Play</h2>
+    <div class="row" style="margin-bottom:8px">
+      <button id="btn-scan" class="primary">Scan NFC Tag</button>
+      <span id="site-pill" class="pill">Current site: <span id="curSite">None</span></span>
+      <span id="game-pill" class="pill">Game ID: <span id="curGame">—</span></span>
     </div>
-    <p class="muted" id="install-hint">If the button is disabled, the browser hasn't fired <code>beforeinstallprompt</code> yet—interact for a moment, or use Chrome menu → Add to Home screen.</p>
+
+    <details>
+      <summary class="muted">No NFC? Paste site or control-tag JSON manually</summary>
+      <textarea id="manualJson" class="mono" rows="6" placeholder='Paste JSON here (site/game_seed/game_join/game_results)'></textarea>
+      <div class="row" style="margin-top:6px">
+        <button id="btn-load-json">Load JSON</button>
+        <span class="small muted">Emulates an NFC scan using pasted data.</span>
+      </div>
+    </details>
+
+    <hr style="border:none;border-top:1px solid var(--line);margin:12px 0" />
+
+    <div class="grid2">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div class="muted small">Money</div>
+            <div class="money" id="money">$0</div>
+          </div>
+          <div>
+            <div class="muted small">Museum income (per min)</div>
+            <div id="perMin">$0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="muted small">Tools</div>
+        <div class="row small">
+          <label><input type="checkbox" id="chk-sifter" checked/> Fine sifter</label>
+          <label><input type="checkbox" id="chk-brush" checked/> Brushes</label>
+          <label><input type="checkbox" id="chk-jack" /> Jackhammers</label>
+        </div>
+        <div class="small muted">Tools slightly improve efficiency (more finds per hour).</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div style="flex:1">
+          <label class="small muted">Time to spend digging (hours)</label>
+          <input type="range" id="digHours" min="0.5" max="8" value="2" step="0.5" />
+          <div class="row small">
+            <span>Hours: <b id="hoursLabel">2.0</b></span>
+            <span class="muted">More hours → more chances to find something.</span>
+          </div>
+        </div>
+        <div>
+          <button id="btn-dig" class="primary">Dig at current site</button>
+        </div>
+      </div>
+      <div id="siteSummary" class="small muted" style="margin-top:8px"></div>
+    </div>
+
+    <div id="digResults" class="list"></div>
   </section>
 
-  <section>
-    <h2>Write / Read NFC</h2>
-    <div class="row">
-      <div>
-        <label>Paste JSON (.bin text works too)</label>
-        <textarea id="payload" class="mono" rows="10" placeholder='{"t":"land","gid":"A1B2C3D4", ... }'></textarea>
-      </div>
-      <div>
-        <label>Or choose a file (.bin / .json)</label>
-        <input id="file" type="file" accept=".bin,.json,text/plain,application/json">
-        <div style="margin-top:8px">
-          <label>Record Type</label>
-          <select id="rtype">
-            <option value="mime">MIME (application/json)</option>
-            <option value="text">Text (UTF-8)</option>
-          </select>
-        </div>
-        <div style="margin-top:8px">
-          <label class="muted">Optional MIME type (if not JSON):</label>
-          <input id="mtype" value="application/json">
-        </div>
-      </div>
-    </div>
-    <div class="toolbar">
-      <button id="btn-write" class="primary">Write to Tag</button>
-      <button id="btn-read">Read Tag</button>
-      <button id="btn-lock">Make Read-Only</button>
-    </div>
-    <p class="muted">Use Chrome on Android. Web NFC requires HTTPS or <code>http://localhost</code>.</p>
-  </section>
+  <!-- Right: Inventory & Museum -->
+  <div class="rightcol">
+    <section>
+      <h2>Inventory</h2>
+      <div id="invList" class="list"></div>
+    </section>
 
-  <section>
-    <h2>Console</h2>
-    <pre id="log" class="mono">(ready)</pre>
-  </section>
+    <section>
+      <h2>Museum</h2>
+      <div class="small muted">Items on display generate money each minute.</div>
+      <div id="museumList" class="list" style="margin-top:8px"></div>
+    </section>
+  </div>
 </main>
 
 <script>
-const $ = s => document.querySelector(s);
-const log = (m) => { const el=$("#log"); el.textContent = (el.textContent==="(ready)"?"":el.textContent+"\n")+m; };
+// -----------------------------
+// State & persistence
+// -----------------------------
+const state = {
+  money: 1000,
+  inventory: [],
+  museum: [],
+  currentSite: null,
+  lastIncomeTick: Date.now(),
+  game: {
+    gameId: null,
+    rules: null,
+    playerId: null,
+    deviceHash: null
+  }
+};
 
-// Service worker registration
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js').then(
-      () => log('SW registered'),
-      err => log('SW registration failed: '+err)
-    );
+const PRICE_TABLE = {
+  "Tyrannosaurus rex": 12000,
+  "Triceratops": 5000,
+  "Torosaurus": 4500,
+  "Edmontosaurus": 2500,
+  "Dakotaraptor": 7000,
+  "Thescelosaurus": 1800,
+  "Anzu": 4000,
+  "Allosaurus": 5000,
+  "Ceratosaurus": 4200,
+  "Torvosaurus": 4800,
+  "Stegosaurus": 3500,
+  "Camptosaurus": 2000,
+  "Dryosaurus": 1500,
+  "Apatosaurus": 6000,
+  "Diplodocus": 6000,
+  "Camarasaurus": 5500,
+  "Brachiosaurus": 9000,
+  "Gorgosaurus": 5200,
+  "Centrosaurus": 2400,
+  "Chasmosaurus": 2600,
+  "Corythosaurus": 2200,
+  "Lambeosaurus": 2300,
+  "Styracosaurus": 2800,
+  "Microraptor": 2700,
+  "Sinosauropteryx": 2300,
+  "Confuciusornis": 1600,
+  "Psittacosaurus": 1400,
+  "Yutyrannus": 8000,
+  "Archaeopteryx": 12000,
+  "Rhamphorhynchus (pterosaur)": 3000,
+  "Sauropod bones": 1200,
+  "Sauropod teeth": 700,
+  "Small theropod teeth": 900,
+  "FossilizedEggshell": 600,
+  "Turtles": 800,
+  "Crocodyliform remains": 1100,
+  "Gar fish scales": 300,
+  "Fish scales": 250,
+  "Ganoid fish scales": 350,
+  "Insect impressions": 300,
+  "Plant impressions": 300,
+  "Crustaceans": 400,
+  "Cephalopod remains": 500,
+  "Echinoderms": 350,
+  "FossilFragments": 200,
+  "NothingFound": 0
+};
+
+const MUSEUM_YIELD = { // per minute
+  "Tyrannosaurus rex": 90,
+  "Triceratops": 35,
+  "Torosaurus": 32,
+  "Edmontosaurus": 18,
+  "Dakotaraptor": 50,
+  "Thescelosaurus": 12,
+  "Anzu": 28,
+  "Allosaurus": 35,
+  "Ceratosaurus": 31,
+  "Torvosaurus": 34,
+  "Stegosaurus": 24,
+  "Camptosaurus": 13,
+  "Dryosaurus": 10,
+  "Apatosaurus": 45,
+  "Diplodocus": 45,
+  "Camarasaurus": 42,
+  "Brachiosaurus": 70,
+  "Gorgosaurus": 36,
+  "Centrosaurus": 17,
+  "Chasmosaurus": 18,
+  "Corythosaurus": 15,
+  "Lambeosaurus": 16,
+  "Styracosaurus": 19,
+  "Microraptor": 19,
+  "Sinosauropteryx": 16,
+  "Confuciusornis": 11,
+  "Psittacosaurus": 10,
+  "Yutyrannus": 60,
+  "Archaeopteryx": 90,
+  "Rhamphorhynchus (pterosaur)": 20,
+  "Sauropod bones": 7,
+  "Sauropod teeth": 4,
+  "Small theropod teeth": 6,
+  "FossilizedEggshell": 5,
+  "Turtles": 7,
+  "Crocodyliform remains": 9,
+  "Gar fish scales": 2,
+  "Fish scales": 2,
+  "Ganoid fish scales": 3,
+  "Insect impressions": 3,
+  "Plant impressions": 3,
+  "Crustaceans": 4,
+  "Cephalopod remains": 5,
+  "Echinoderms": 3,
+  "FossilFragments": 1
+};
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function save() {
+  localStorage.setItem("fdg_state", JSON.stringify(state));
+}
+
+function load() {
+  const s = localStorage.getItem("fdg_state");
+  if (s) {
+    try { Object.assign(state, JSON.parse(s)); } catch {}
+  }
+  // Ensure IDs
+  function stableId(key, len=8){
+    const s = localStorage.getItem(key);
+    if (s) return s;
+    const v = Math.random().toString(36).slice(2,2+len);
+    localStorage.setItem(key, v);
+    return v;
+  }
+  state.game.playerId = state.game.playerId || stableId("fdg_player_id", 8);
+  state.game.deviceHash = state.game.deviceHash || stableId("fdg_device_hash", 16);
+}
+load();
+
+// -----------------------------
+// UI helpers
+// -----------------------------
+const $ = s => document.querySelector(s);
+const moneyEl = $("#money");
+const perMinEl = $("#perMin");
+const invList = $("#invList");
+const museumList = $("#museumList");
+const curSiteEl = $("#curSite");
+const curGameEl = $("#curGame");
+const siteSummary = $("#siteSummary");
+const digResults = $("#digResults");
+
+function fmtMoney(v){ return "$" + Math.round(v).toLocaleString(); }
+
+function refreshHUD() {
+  moneyEl.textContent = fmtMoney(state.money);
+  const perMin = state.museum.reduce((a,m)=>a+(m.perMin||0),0);
+  perMinEl.textContent = fmtMoney(perMin);
+  curSiteEl.textContent = state.currentSite ? state.currentSite.site : "None";
+  curGameEl.textContent = state.game.gameId || "—";
+  renderInventory();
+  renderMuseum();
+  renderSiteSummary();
+}
+
+function renderInventory() {
+  invList.innerHTML = "";
+  if (!state.inventory.length) {
+    invList.innerHTML = `<div class="muted small">Empty.</div>`;
+    return;
+  }
+  state.inventory.forEach(item=>{
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div><b>${item.name}</b> <span class="muted small">(${item.site})</span></div>
+          <div class="small muted">Value: ${fmtMoney(item.price)} · Rarity: ${item.rarity}</div>
+        </div>
+        <div class="row">
+          <button data-act="sell" data-id="${item.id}">Sell (${fmtMoney(item.price)})</button>
+          ${MUSEUM_YIELD[item.name] ? `<button class="primary" data-act="museum" data-id="${item.id}">Display</button>` : `<span class="small muted">Not displayable</span>`}
+        </div>
+      </div>
+    `;
+    div.addEventListener("click", (e)=>{
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      const id = btn.dataset.id;
+      const ix = state.inventory.findIndex(x=>x.id===id);
+      if (ix<0) return;
+      const it = state.inventory[ix];
+      if (btn.dataset.act==="sell") {
+        state.money += it.price;
+        state.inventory.splice(ix,1);
+      } else if (btn.dataset.act==="museum") {
+        state.inventory.splice(ix,1);
+        state.museum.push({
+          id: uid(),
+          name: it.name,
+          site: it.site,
+          perMin: MUSEUM_YIELD[it.name] || 0
+        });
+      }
+      save(); refreshHUD();
+    });
+    invList.appendChild(div);
   });
 }
 
-// Install button via beforeinstallprompt
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  $("#btn-install").disabled = false;
-  log('beforeinstallprompt fired (install available)');
-});
-
-$("#btn-install").addEventListener('click', async () => {
-  if (!deferredPrompt) { alert('Install not available yet'); return; }
-  deferredPrompt.prompt();
-  const choice = await deferredPrompt.userChoice;
-  log('Install choice: ' + choice.outcome);
-  deferredPrompt = null;
-  $("#btn-install").disabled = true;
-});
-
-$("#btn-a2hs-help").addEventListener('click', () => {
-  alert('If install isn\'t offered automatically:\n• Android Chrome: use this Install button when it lights up, or Chrome menu → Add to Home Screen.\n• iOS Safari: Share → Add to Home Screen (no Web NFC).');
-});
-
-function setSupport(){
-  if (!('NDEFReader' in window)) {
-    $("#support").textContent = "Web NFC not available (Chrome on Android only)";
-    $("#support").classList.add("warn");
-  } else {
-    const secure = window.isSecureContext;
-    $("#support").textContent = secure ? "Web NFC ready (secure context)" : "Web NFC blocked (serve via HTTPS or localhost)";
-    if (!secure) $("#support").classList.add("warn");
+function renderMuseum() {
+  museumList.innerHTML = "";
+  if (!state.museum.length) {
+    museumList.innerHTML = `<div class="muted small">No exhibits yet.</div>`;
+    return;
   }
+  state.museum.forEach(m=>{
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div><b>${m.name}</b> <span class="muted small">(${m.site})</span></div>
+          <div class="small muted">Income: ${fmtMoney(m.perMin)}/min</div>
+        </div>
+        <div>
+          <button data-id="${m.id}">Remove</button>
+        </div>
+      </div>
+    `;
+    div.querySelector("button").addEventListener("click", ()=>{
+      const ix = state.museum.findIndex(x=>x.id===m.id);
+      if (ix>=0) state.museum.splice(ix,1);
+      save(); refreshHUD();
+    });
+    museumList.appendChild(div);
+  });
 }
-setSupport();
 
-$("#file").addEventListener("change", async (e)=>{
-  const f = e.target.files[0];
-  if (!f) return;
-  const text = await f.text();
-  $("#payload").value = text.trim();
-  log(`Loaded file: ${f.name} (${f.size} bytes)`);
-});
+function renderSiteSummary() {
+  if (!state.currentSite) { siteSummary.textContent = ""; return; }
+  const pf = state.currentSite.possibleFinds || {};
+  const entries = Object.entries(pf).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${(v*100).toFixed(0)}%`);
+  siteSummary.textContent = `Formation: ${state.currentSite.formation} · Odds: ${entries.join(" · ")}`;
+}
 
-async function writeTag(){
-  if (!('NDEFReader' in window)) return alert("Web NFC not available in this browser.");
-  if (!window.isSecureContext) return alert("Open over HTTPS or http://localhost for Web NFC.");
-  const text = $("#payload").value.trim();
-  if (!text) return alert("Paste JSON or load a file first.");
-  const rtype = $("#rtype").value;
-  const mtype = $("#mtype").value || "application/json";
-  try {
-    const ndef = new NDEFReader();
-    if (rtype === "mime") {
-      await ndef.write({ records: [{ recordType: "mime", mediaType: mtype, data: text }] });
-    } else {
-      await ndef.write(text);
+// -----------------------------
+// Museum income tick
+// -----------------------------
+setInterval(()=>{
+  const now = Date.now();
+  const mins = (now - state.lastIncomeTick)/60000;
+  if (mins<=0) return;
+  const perMin = state.museum.reduce((a,m)=>a+(m.perMin||0),0);
+  const gain = perMin * mins;
+  if (gain>0) {
+    state.money += gain;
+    state.lastIncomeTick = now;
+    save(); refreshHUD();
+  }
+}, 2000);
+
+// -----------------------------
+const hoursInput = $("#digHours");
+const hoursLabel = $("#hoursLabel");
+hoursInput.addEventListener("input", ()=> hoursLabel.textContent = Number(hoursInput.value).toFixed(1));
+
+function effectiveDraws(hours) {
+  let draws = Math.max(1, Math.round(hours));
+  let toolBoost = 0;
+  if ($("#chk-sifter").checked) toolBoost += 0.2;
+  if ($("#chk-brush").checked)  toolBoost += 0.1;
+  if ($("#chk-jack").checked)   toolBoost += 0.2;
+  draws = Math.max(1, Math.round(draws * (1 + toolBoost)));
+  return draws;
+}
+
+function weightedPick(table) {
+  const entries = Object.entries(table);
+  const sum = entries.reduce((a,[,p])=>a+p,0);
+  let r = Math.random() * sum;
+  for (const [k,p] of entries) {
+    r -= p;
+    if (r <= 0) return k;
+  }
+  return entries[entries.length-1][0];
+}
+
+function rarityFromPrice(price) {
+  if (price >= 8000) return "Legendary";
+  if (price >= 4000) return "Rare";
+  if (price >= 1500) return "Uncommon";
+  if (price > 0)     return "Common";
+  return "—";
+}
+
+$("#btn-dig").addEventListener("click", ()=>{
+  if (!state.currentSite) { alert("Scan a site tag (or paste JSON) first."); return; }
+  const hours = Number(hoursInput.value);
+  const draws = effectiveDraws(hours);
+
+  const results = [];
+  for (let i=0;i<draws;i++) {
+    const pick = weightedPick(state.currentSite.possibleFinds);
+    if (pick==="NothingFound") {
+      results.push({name:"NothingFound"});
+      continue;
     }
-    log(`Write success (${rtype})`);
-    alert("Write success");
-  } catch (err) {
-    console.error(err); log("Write failed: " + err); alert("Write failed: " + err);
+    const price = PRICE_TABLE[pick] ?? 500;
+    results.push({
+      id: uid(),
+      name: pick,
+      site: state.currentSite.site,
+      rarity: rarityFromPrice(price),
+      price
+    });
+  }
+
+  digResults.innerHTML = "";
+  if (!results.some(r=>r.name!=="NothingFound")) {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `<div class="bad">You found nothing this time. Try more hours or different tools/site.</div>`;
+    digResults.appendChild(div);
+  } else {
+    results.forEach(r=>{
+      if (r.name==="NothingFound") return;
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div class="found"><b>${r.name}</b> <span class="muted small">(${r.site})</span></div>
+            <div class="small muted">Rarity: ${r.rarity} · Value: ${fmtMoney(r.price)}</div>
+          </div>
+          <div class="row">
+            <button data-act="sell">Sell (${fmtMoney(r.price)})</button>
+            ${MUSEUM_YIELD[r.name] ? `<button class="primary" data-act="museum">Display</button>` : `<span class="small muted">Not displayable</span>`}
+          </div>
+        </div>
+      `;
+      div.addEventListener("click",(e)=>{
+        const b = e.target.closest("button");
+        if (!b) return;
+        if (b.dataset.act==="sell") {
+          state.money += r.price;
+        } else if (b.dataset.act==="museum") {
+          state.museum.push({ id: uid(), name: r.name, site: r.site, perMin: MUSEUM_YIELD[r.name]||0 });
+        }
+        save(); refreshHUD();
+        div.remove();
+      });
+      digResults.appendChild(div);
+      state.inventory.push(r);
+    });
+    save(); refreshHUD();
+  }
+});
+
+// -----------------------------
+// Web NFC support badge
+// -----------------------------
+function setSupportBadge(){
+  const sup = $("#support");
+  if (!('NDEFReader' in window)) {
+    sup.textContent = "Web NFC not available (Chrome on Android, HTTPS/localhost required)";
+    sup.classList.add("warn");
+  } else {
+    sup.textContent = window.isSecureContext ? "Web NFC ready (secure context)" : "Serve over HTTPS or http://localhost";
+    if (!window.isSecureContext) sup.classList.add("warn");
   }
 }
+setSupportBadge();
 
-async function readTag(){
-  if (!('NDEFReader' in window)) return alert("Web NFC not available in this browser.");
-  if (!window.isSecureContext) return alert("Open over HTTPS or http://localhost for Web NFC.");
+// -----------------------------
+// Load site JSON helper & manual
+// -----------------------------
+async function loadSiteFromJSONText(text) {
   try {
-    const ndef = new NDEFReader();
-    await ndef.scan();
-    log("Scanning… tap a tag");
-    ndef.onreading = event => {
-      const { serialNumber, message } = event;
-      log(`Tag serial: ${serialNumber || "(unknown)"}`);
-      for (const rec of message.records) {
-        const rt = rec.recordType, mt = rec.mediaType || "", enc = rec.encoding || "utf-8";
-        let data = "(binary)";
-        try { data = rec.data ? new TextDecoder(enc).decode(rec.data) : "(no data)"; } catch {}
-        log(`Record: type=${rt} media=${mt}
-Payload:
-${data}`);
+    const obj = JSON.parse(text);
+    if (!obj.site && !obj.t) throw new Error("Missing fields");
+    // route here for non-site tags too
+    if (obj.t) { await routeControlTag(obj, text); return; }
+    if (!obj.possibleFinds) throw new Error("No possibleFinds in site JSON");
+    state.currentSite = obj;
+    save(); refreshHUD();
+    alert("Loaded site: " + (state.currentSite?.site || "unknown"));
+  } catch (e) {
+    alert("Invalid JSON\\n" + e);
+  }
+}
+$("#btn-load-json").addEventListener("click", ()=>{
+  const txt = $("#manualJson").value.trim();
+  if (!txt) return alert("Paste JSON first.");
+  loadSiteFromJSONText(txt);
+});
+
+// -----------------------------
+// NFC read helpers
+// -----------------------------
+async function ndefReadOnce(){
+  const ndef = new NDEFReader();
+  await ndef.scan();
+  return new Promise((resolve, reject)=>{
+    ndef.onreading = ev => {
+      for (const rec of ev.message.records) {
+        try {
+          const txt = new TextDecoder(rec.encoding || "utf-8").decode(rec.data);
+          return resolve(txt);
+        } catch {}
       }
+      reject(new Error("No text payload"));
     };
-    ndef.onreadingerror = () => log("Read error.");
-  } catch (err) {
-    console.error(err); log("Scan failed: " + err); alert("Scan failed: " + err);
+    ndef.onreadingerror = () => reject(new Error("Read error"));
+  });
+}
+async function ndefWriteText(text){
+  const ndef = new NDEFReader();
+  await ndef.write(text);
+}
+
+// -----------------------------
+// Control tags: seed/join/results
+// -----------------------------
+function handleGameSeed(obj){
+  state.game.gameId = obj.game_id || null;
+  state.game.rules = obj;
+  save(); refreshHUD();
+  alert("Game seed loaded.\\nGame ID: " + state.game.gameId);
+}
+
+async function handleGameJoin(rawText){
+  const obj = JSON.parse(rawText);
+  if (obj.t !== "game_join") throw new Error("Not a join tag");
+  if (state.game.gameId && obj.game_id && obj.game_id !== state.game.gameId){
+    if (!confirm("Join tag Game ID differs. Continue?")) return;
+  }
+  obj.game_id ||= state.game.gameId;
+  obj.players ||= [];
+  if (!obj.players.some(p=>p?.device_hash===state.game.deviceHash)){
+    obj.players.push({
+      player_id: state.game.playerId,
+      name_hint: null,
+      device_hash: state.game.deviceHash,
+      starter_site_id: state.currentSite?.site || null,
+      joined_at: Math.floor(Date.now()/1000)
+    });
+  }
+  await ndefWriteText(JSON.stringify(obj));
+  alert("Joined game: " + (obj.game_id||"(no id)"));
+}
+
+function buildSubmission(){
+  const money = Math.round(state.money);
+  const museumPerMin = state.museum.reduce((a,m)=>a+(m.perMin||0),0);
+  const findsSold = 0; // could be tracked if needed
+  const findsDisplayed = state.museum.length;
+  const raresFound = state.inventory.filter(i=>i.rarity==="Rare"||i.rarity==="Legendary").length;
+  const siteScans = 0; // increment in scan handler if desired
+  const turnsUsed = 0; // increment per dig if desired
+  return {
+    player_id: state.game.playerId,
+    device_hash: state.game.deviceHash,
+    money, museum_per_min: museumPerMin,
+    finds_sold: findsSold, finds_displayed: findsDisplayed,
+    rares_found: raresFound, site_scans: siteScans, turns_used: turnsUsed
+  };
+}
+
+function finalizeResultsFromSubmissions(submissions, metric="money"){
+  const placements = [...submissions]
+    .sort((a,b)=>(b[metric]||0)-(a[metric]||0))
+    .map((s, i)=>({rank:i+1, player_id:s.player_id, [metric]:s[metric]}));
+  return {
+    ranking_metric: metric,
+    placements,
+    finalized_at: Math.floor(Date.now()/1000)
+  };
+}
+
+async function handleGameResults(rawText, mode="auto"){
+  const obj = JSON.parse(rawText);
+  if (obj.t !== "game_results") throw new Error("Not a results tag");
+  if (state.game.gameId && obj.game_id && obj.game_id !== state.game.gameId){
+    if (!confirm("Results tag Game ID differs. Continue?")) return;
+  }
+  obj.submissions ||= [];
+
+  if (obj.phase === "collect"){
+    if (!obj.submissions.some(s=>s?.device_hash===state.game.deviceHash)){
+      obj.submissions.push(buildSubmission());
+      await ndefWriteText(JSON.stringify(obj));
+      alert("Submitted your stats. When all players submit, host finalizes.");
+    } else {
+      alert("You already submitted.");
+    }
+
+    if (mode === "finalize"){
+      obj.results = finalizeResultsFromSubmissions(obj.submissions, "money");
+      obj.phase = "finalized";
+      await ndefWriteText(JSON.stringify(obj));
+      alert("Results finalized. Everyone can scan again to see placements.");
+    }
+
+  } else if (obj.phase === "finalized"){
+    const me = obj.submissions.find(s=>s?.device_hash===state.game.deviceHash);
+    const top = obj.results?.placements?.[0];
+    alert(
+      "Winner: " + (top?.player_id||"unknown") + "\\n" +
+      "Your money: " + (me?.money ?? "?")
+    );
+  } else {
+    alert("Unknown results phase.");
   }
 }
 
-async function lockTag(){
-  if (!('NDEFReader' in window)) return alert("Web NFC not available in this browser.");
-  if (!window.isSecureContext) return alert("Open over HTTPS or http://localhost for Web NFC.");
-  if (!confirm("This will make the tag permanently read-only. Continue?")) return;
+async function routeControlTag(obj, rawText){
+  if (obj.t === "game_seed") return handleGameSeed(obj);
+  if (obj.t === "game_join") return handleGameJoin(rawText);
+  if (obj.t === "game_results") return handleGameResults(rawText /*, "finalize"*/);
+  // otherwise treat as site
+  state.currentSite = obj;
+  save(); refreshHUD();
+}
+
+// -----------------------------
+// Scan button (routes by tag type)
+// -----------------------------
+$("#btn-scan").addEventListener("click", async ()=>{
+  if (!('NDEFReader' in window)) { alert("Web NFC not supported in this browser."); return; }
+  if (!window.isSecureContext) { alert("Open over HTTPS or http://localhost for Web NFC."); return; }
   try {
-    const ndef = new NDEFReader();
-    await ndef.makeReadOnly(); // experimental
-    log("Tag locked (read-only)."); alert("Tag locked (read-only).");
+    const text = await ndefReadOnce();
+    try {
+      const obj = JSON.parse(text);
+      await routeControlTag(obj, text);
+      if (!obj.t && obj.site) alert("Loaded site: " + (obj.site || "unknown"));
+    } catch {
+      alert("Tag text wasn’t valid JSON.");
+    }
   } catch (err) {
-    console.error(err); log("Lock failed: " + err); alert("Lock failed: " + err);
+    alert("Scan failed: " + err);
   }
-}
+});
 
-$("#btn-write").addEventListener("click", writeTag);
-$("#btn-read").addEventListener("click", readTag);
-$("#btn-lock").addEventListener("click", lockTag);
+// Initial paint
+refreshHUD();
 </script>
 </body>
 </html>
