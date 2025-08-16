@@ -1,10 +1,18 @@
-# NFC Writer PWA (HTTPS-Ready)
-This is a Progressive Web App for writing to NFC tags.
+NFC Writer PWA
+==============
 
-## Usage
-1. Host this folder on **any HTTPS server** (GitHub Pages, Netlify, etc).
-2. Open the site in Chrome for Android.
-3. Tap "Install" to install as a standalone app.
-4. Tap "Write to NFC Tag" and scan a tag.
+How to run:
+-----------
+1. Unzip this package.
+2. On desktop, run a local server in the unzipped folder:
+   - Example: `python -m http.server 8000`
+3. On your Android phone (same Wi-Fi), open Chrome and visit:
+   - http://<your-desktop-IP>:8000/
+4. You'll see NFC Writer app. Use buttons to Read, Write, or Lock tags.
+5. Install it as a PWA (Add to Home Screen).
 
-⚠️ Web NFC requires HTTPS (except localhost).
+Notes:
+------
+- Works only in Chrome on Android.
+- NFC requires HTTPS or localhost, so direct file:/// won't work.
+- Tag locking (Make Read-Only) is experimental. Use NXP TagWriter for reliable locking.

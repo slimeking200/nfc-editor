@@ -1,10 +1,10 @@
 {
   "name": "NFC Writer PWA",
   "short_name": "NFCWriter",
-  "start_url": ".",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#2d2d2d",
-  "theme_color": "#2d2d2d",
+  "background_color": "#ffffff",
+  "description": "A simple NFC writer and reader PWA",
   "icons": [
     {
       "src": "icons/icon-192.png",
