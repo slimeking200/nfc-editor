@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NFC Writer PWA</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#2d2d2d"/>
+</head>
+<body>
+  <h1>NFC Writer PWA</h1>
+  <button id="writeBtn">Write to NFC Tag</button>
+  <pre id="log"></pre>
+
+  <script>
+    const log = msg => document.getElementById('log').textContent += msg + "\n";
+    document.getElementById("writeBtn").addEventListener("click", async () => {
+      if ("NDEFWriter" in window) {
+        try {
+          const writer = new NDEFWriter();
+          await writer.write("Hello from NFC Writer PWA over HTTPS!");
+          log("✅ Tag written successfully.");
+        } catch (err) {
+          log("❌ Error: " + err);
+        }
+      } else {
+        log("⚠️ Web NFC not supported in this browser.");
+      }
+    });
+  </script>
+</body>
+</html>
