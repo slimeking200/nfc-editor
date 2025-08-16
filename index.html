@@ -1,32 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
   <title>NFC Writer PWA</title>
-  <link rel="manifest" href="manifest.webmanifest" />
-  <meta name="theme-color" content="#2d2d2d"/>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-  <h1>NFC Writer PWA</h1>
-  <button id="writeBtn">Write to NFC Tag</button>
+  <h1>NFC Writer</h1>
+  <button id="read">Read Tag</button>
+  <button id="write">Write Tag</button>
+  <button id="lock">Make Read-Only</button>
   <pre id="log"></pre>
-
   <script>
     const log = msg => document.getElementById('log').textContent += msg + "\n";
-    document.getElementById("writeBtn").addEventListener("click", async () => {
-      if ("NDEFWriter" in window) {
+    if (!("NDEFReader" in window)) {
+      log("Web NFC not supported in this browser.");
+    } else {
+      document.getElementById('read').onclick = async () => {
         try {
-          const writer = new NDEFWriter();
-          await writer.write("Hello from NFC Writer PWA over HTTPS!");
-          log("✅ Tag written successfully.");
-        } catch (err) {
-          log("❌ Error: " + err);
+          const reader = new NDEFReader();
+          await reader.scan();
+          reader.onreading = event => {
+            const decoder = new TextDecoder();
+            for (const record of event.message.records) {
+              log("Record: " + decoder.decode(record.data));
+            }
+          };
+          log("Scan started.");
+        } catch (e) {
+          log("Error: " + e);
         }
-      } else {
-        log("⚠️ Web NFC not supported in this browser.");
-      }
-    });
+      };
+      document.getElementById('write').onclick = async () => {
+        try {
+          const writer = new NDEFReader();
+          await writer.write("Hello from NFC Writer PWA!");
+          log("Write complete.");
+        } catch (e) {
+          log("Error: " + e);
+        }
+      };
+      document.getElementById('lock').onclick = async () => {
+        try {
+          const writer = new NDEFReader();
+          await writer.makeReadOnly();
+          log("Tag set to read-only.");
+        } catch (e) {
+          log("Error: " + e);
+        }
+      };
+    }
   </script>
 </body>
 </html>

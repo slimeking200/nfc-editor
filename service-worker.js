@@ -1,16 +1,19 @@
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open('nfc-pwa-cache').then(cache => {
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open('nfc-cache').then(cache => {
       return cache.addAll([
-        '/',
-        '/index.html',
-        '/manifest.webmanifest'
+        './',
+        './index.html',
+        './manifest.webmanifest'
       ]);
     })
   );
 });
-self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(response => response || fetch(e.request))
+
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request).then(response => {
+      return response || fetch(event.request);
+    })
   );
 });
