@@ -134,6 +134,81 @@
 </main>
 
 <script>
+
+// ---------- Loose JSON parsing helpers ----------
+function tryParse(str) {
+  try { return JSON.parse(str); } catch (e) { return null; }
+}
+function parseLooseJSON(input) {
+  if (typeof input !== "string") return input;
+  let s = input;
+
+  // Remove BOM, trim
+  s = s.replace(/^\uFEFF/, "").trim();
+
+  // Normalize smart quotes to straight quotes
+  s = s.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+
+  // First quick attempt
+  let obj = tryParse(s);
+  if (obj) return obj;
+
+  // If payload has extra text around JSON, keep only the first {...} or [...]
+  const objMatch = s.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (objMatch) {
+    s = objMatch[1];
+    obj = tryParse(s);
+    if (obj) return obj;
+  }
+
+  // Remove trailing commas before } or ]
+  s = s.replace(/,\s*([}\]])/g, '$1');
+
+  // Convert single-quoted strings to double-quoted (best-effort)
+  // (This is permissive; acceptable for tolerant parsing in this app.)
+  s = s.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+
+  // Collapse excessive whitespace
+  s = s.replace(/\s+/g, ' ').trim();
+
+  obj = tryParse(s);
+  if (obj) return obj;
+
+  // Ultra-loose fallback: parse "key: value" pairs separated by commas
+  // e.g., t: game_join, game_id: TEST01, players: []
+  if (!obj) {
+    const candidate = {};
+    // Extract content inside braces if present
+    let core = s.replace(/^{|}$/g, '');
+    const parts = core.split(/\s*,\s*/);
+    let any = false;
+    for (const p of parts) {
+      const kv = p.split(/\s*:\s*/);
+      if (kv.length >= 2) {
+        let k = kv[0].replace(/^["']|["']$/g, '');
+        let vraw = kv.slice(1).join(':').trim();
+        // Booleans/null/number/array recognition
+        let v = vraw;
+        if (vraw === 'null') v = null;
+        else if (vraw === 'true') v = true;
+        else if (vraw === 'false') v = false;
+        else if (/^\d+(\.\d+)?$/.test(vraw)) v = Number(vraw);
+        else if (vraw.startsWith('[') && vraw.endsWith(']')) {
+          const arr = tryParse(vraw.replace(/'/g, '"'));
+          v = Array.isArray(arr) ? arr : [];
+        } else {
+          v = vraw.replace(/^["']|["']$/g, '');
+        }
+        candidate[k] = v;
+        any = true;
+      }
+    }
+    if (any) return candidate;
+  }
+
+  throw new Error("Invalid JSON (even after tolerant parsing)");
+}
+
 // -----------------------------
 // State & persistence
 // -----------------------------
@@ -592,7 +667,7 @@ setSupportBadge();
 // -----------------------------
 async function loadSiteFromJSONText(text) {
   try {
-    const obj = JSON.parse(text);
+    const obj = parseLooseJSON(text);
     if (!obj.site && !obj.t) throw new Error("Missing fields");
     if (obj.t) { await routeControlTag(obj, text); return; }
     if (!obj.possibleFinds) throw new Error("No possibleFinds in site JSON");
@@ -646,7 +721,7 @@ function handleGameSeed(obj){
 }
 
 async function handleGameJoin(rawText){
-  const obj = JSON.parse(rawText);
+  const obj = parseLooseJSON(rawText);
   if (obj.t !== "game_join") throw new Error("Not a join tag");
   if (state.game.gameId && obj.game_id && obj.game_id !== state.game.gameId){
     if (!confirm("Join tag Game ID differs. Continue?")) return;
@@ -691,7 +766,7 @@ function finalizeResultsFromSubmissions(submissions, metric="money"){
 }
 
 async function handleGameResults(rawText, mode="auto"){
-  const obj = JSON.parse(rawText);
+  const obj = parseLooseJSON(rawText);
   if (obj.t !== "game_results") throw new Error("Not a results tag");
   if (state.game.gameId && obj.game_id && obj.game_id !== state.game.gameId){
     if (!confirm("Results tag Game ID differs. Continue?")) return;
@@ -801,7 +876,7 @@ document.getElementById("btn-scan").addEventListener("click", async ()=>{
   try {
     const text = await ndefReadOnce();
     try {
-      const obj = JSON.parse(text);
+      const obj = parseLooseJSON(text);
       await routeControlTag(obj, text);
       if (!obj.t && obj.site) alert("Loaded site: " + (obj.site || "unknown"));
     } catch {
