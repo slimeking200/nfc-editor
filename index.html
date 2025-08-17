@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Fossil Diggers — Base Game</title>
+<title>Fossil Diggers — Base Game (v6)</title>
 <style>
   :root { --bg:#0b0f14; --panel:#121827; --ink:#eaf0fb; --muted:#9fb0c8; --line:#23324a; --accent:#7bffb5; --bad:#ff7a7a; --gold:#ffd36c; }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial}
@@ -30,13 +30,29 @@
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .small{font-size:12px}
   details summary{cursor:pointer}
+  #permitModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:50}
+  #permitModal .box{background:#0f1828;border:1px solid var(--line);border-radius:14px;max-width:520px;width:92%;padding:14px}
 </style>
 </head>
 <body>
 <header>
   <h1>Fossil Diggers — Base Game</h1>
-  <div id="support" class="pill" style="margin-top:6px"></div>
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <div id="support" class="pill" style="margin-top:6px"></div>
+    <button id="btn-newgame" class="pill" style="border-radius:10px">New Game</button>
+  </div>
 </header>
+
+<div id="permitModal">
+  <div class="box">
+    <h3 style="margin:0 0 8px 0;font-size:18px">Permit Required</h3>
+    <div class="small muted" id="permitText">You need a permit to excavate here.</div>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button id="permitCancel">Cancel</button>
+      <button id="permitBuy" class="primary">Buy Permit</button>
+    </div>
+  </div>
+</div>
 
 <main>
   <!-- Left: Play panel -->
@@ -74,13 +90,11 @@
       </div>
 
       <div class="card">
-        <div class="muted small">Tools</div>
-        <div class="row small">
-          <label><input type="checkbox" id="chk-sifter" checked/> Fine sifter</label>
-          <label><input type="checkbox" id="chk-brush" checked/> Brushes</label>
-          <label><input type="checkbox" id="chk-jack" /> Jackhammers</label>
+        <div class="row" style="justify-content:space-between;align-items:baseline">
+          <h3 style="margin:0;font-size:15px">Shop</h3>
+          <div class="small muted">Tier 1 = $500; each tier doubles; each tier adds +10% effect.</div>
         </div>
-        <div class="small muted">Tools slightly improve efficiency (more finds per hour).</div>
+        <div class="list small" id="shopList"></div>
       </div>
     </div>
 
@@ -124,7 +138,7 @@
 // State & persistence
 // -----------------------------
 const state = {
-  money: 1000,
+  money: 1000,                // fixed starting money
   inventory: [],
   museum: [],
   currentSite: null,
@@ -134,7 +148,12 @@ const state = {
     rules: null,
     playerId: null,
     deviceHash: null
-  }
+  },
+  tools: { brushes: 0, jackhammers: 0, shovels: 0 },
+  // Permits and pricing
+  permits: {},
+  permitPriceBase: 1000,
+  permitsPurchasedCount: 0
 };
 
 const PRICE_TABLE = {
@@ -243,9 +262,8 @@ function save() {
 function load() {
   const s = localStorage.getItem("fdg_state");
   if (s) {
-    try { Object.assign(state, JSON.parse(s)); } catch {}
+    try { const old = JSON.parse(s); Object.assign(state, old); } catch {}
   }
-  // Ensure IDs
   function stableId(key, len=8){
     const s = localStorage.getItem(key);
     if (s) return s;
@@ -255,6 +273,12 @@ function load() {
   }
   state.game.playerId = state.game.playerId || stableId("fdg_player_id", 8);
   state.game.deviceHash = state.game.deviceHash || stableId("fdg_device_hash", 16);
+
+  // Backfill defaults
+  state.tools = state.tools || { brushes: 0, jackhammers: 0, shovels: 0 };
+  state.permits = state.permits || {};
+  if (typeof state.permitPriceBase !== 'number') state.permitPriceBase = 1000;
+  if (typeof state.permitsPurchasedCount !== 'number') state.permitsPurchasedCount = 0;
 }
 load();
 
@@ -282,8 +306,12 @@ function refreshHUD() {
   renderInventory();
   renderMuseum();
   renderSiteSummary();
+  renderShop();
 }
 
+// -----------------------------
+// Inventory & Museum
+// -----------------------------
 function renderInventory() {
   invList.innerHTML = "";
   if (!state.inventory.length) {
@@ -317,12 +345,7 @@ function renderInventory() {
         state.inventory.splice(ix,1);
       } else if (btn.dataset.act==="museum") {
         state.inventory.splice(ix,1);
-        state.museum.push({
-          id: uid(),
-          name: it.name,
-          site: it.site,
-          perMin: MUSEUM_YIELD[it.name] || 0
-        });
+        state.museum.push({ id: uid(), name: it.name, site: it.site, perMin: MUSEUM_YIELD[it.name] || 0 });
       }
       save(); refreshHUD();
     });
@@ -363,11 +386,54 @@ function renderSiteSummary() {
   if (!state.currentSite) { siteSummary.textContent = ""; return; }
   const pf = state.currentSite.possibleFinds || {};
   const entries = Object.entries(pf).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${(v*100).toFixed(0)}%`);
-  siteSummary.textContent = `Formation: ${state.currentSite.formation} · Odds: ${entries.join(" · ")}`;
+  siteSummary.textContent = `Formation: ${state.currentSite.formation||"-"} · Odds: ${entries.join(" · ")}`;
 }
 
 // -----------------------------
-// Museum income tick
+// Shop logic
+// -----------------------------
+const SHOP_TOOLS = [
+  { key: "brushes", name: "Brushes (Luck: rarer finds)", desc: "Increases odds of rarer items.", icon: "🖌️" },
+  { key: "jackhammers", name: "Jackhammers (Dig speed)", desc: "More items per hour.", icon: "⛏️" },
+  { key: "shovels", name: "Shovels (Depth boost)", desc: "Better odds for deeper fossils.", icon: "🪓" }
+];
+function tierCost(tier){ return 500 * Math.pow(2, tier); }
+function renderShop(){
+  const wrap = document.getElementById("shopList");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  SHOP_TOOLS.forEach(t=>{
+    const tier = state.tools?.[t.key] || 0;
+    const next = tierCost(tier);
+    const effectPct = (tier * 10);
+    const row = document.createElement("div");
+    row.className = "card";
+    row.innerHTML = `
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div>
+          <div><b>${t.icon} ${t.name}</b> <span class="muted small">Tier ${tier} · +${effectPct}%</span></div>
+          <div class="small muted">${t.desc}</div>
+        </div>
+        <div class="row">
+          <button data-key="${t.key}" ${state.money < next ? "disabled": ""}>Buy Tier ${tier+1} (${fmtMoney(next)})</button>
+        </div>
+      </div>
+    `;
+    row.querySelector("button").addEventListener("click", (e)=>{
+      const key = e.target.getAttribute("data-key");
+      const cur = state.tools[key] || 0;
+      const cost = tierCost(cur);
+      if (state.money < cost) { alert("Not enough money."); return; }
+      state.money -= cost;
+      state.tools[key] = cur + 1;
+      save(); refreshHUD(); renderShop();
+    });
+    wrap.appendChild(row);
+  });
+}
+
+// -----------------------------
+// Income tick
 // -----------------------------
 setInterval(()=>{
   const now = Date.now();
@@ -383,24 +449,51 @@ setInterval(()=>{
 }, 2000);
 
 // -----------------------------
+// Digging
+// -----------------------------
 const hoursInput = $("#digHours");
 const hoursLabel = $("#hoursLabel");
 hoursInput.addEventListener("input", ()=> hoursLabel.textContent = Number(hoursInput.value).toFixed(1));
 
 function effectiveDraws(hours) {
   let draws = Math.max(1, Math.round(hours));
-  let toolBoost = 0;
-  if ($("#chk-sifter").checked) toolBoost += 0.2;
-  if ($("#chk-brush").checked)  toolBoost += 0.1;
-  if ($("#chk-jack").checked)   toolBoost += 0.2;
-  draws = Math.max(1, Math.round(draws * (1 + toolBoost)));
+  const jackTier = (state.tools?.jackhammers)||0;
+  const speedBoost = 0.10 * jackTier; // +10% per tier
+  draws = Math.max(1, Math.round(draws * (1 + speedBoost)));
   return draws;
 }
 
-function weightedPick(table) {
+function adjustedWeights(baseTable){
+  const brushTier = (state.tools?.brushes)||0;
+  const luck = 0.10 * brushTier;
+  const shovelTier = (state.tools?.shovels)||0;
+  const depthBoost = 0.10 * shovelTier;
+
+  let maxPrice = 0;
+  for (const name in baseTable){
+    const p = PRICE_TABLE[name] ?? 0;
+    if (p > maxPrice) maxPrice = p;
+  }
+  if (maxPrice <= 0) maxPrice = 1;
+
+  const entries = Object.entries(baseTable).map(([name, prob])=>{
+    const price = PRICE_TABLE[name] ?? 0;
+    const rarityFactor = 1 + (luck * (price / maxPrice));
+    const depthScore = (price / maxPrice);
+    const depthFactor = 1 + depthBoost * depthScore;
+    const weight = prob * rarityFactor * depthFactor;
+    return [name, weight];
+  });
+
+  const sum = entries.reduce((a,[,w])=>a+w,0) || 1;
+  const norm = {};
+  for (const [name, w] of entries) norm[name] = w / sum;
+  return norm;
+}
+
+function weightedPickAdjusted(table){
   const entries = Object.entries(table);
-  const sum = entries.reduce((a,[,p])=>a+p,0);
-  let r = Math.random() * sum;
+  let r = Math.random();
   for (const [k,p] of entries) {
     r -= p;
     if (r <= 0) return k;
@@ -416,33 +509,29 @@ function rarityFromPrice(price) {
   return "—";
 }
 
-$("#btn-dig").addEventListener("click", ()=>{
+document.getElementById("btn-dig").addEventListener("click", ()=>{
   if (!state.currentSite) { alert("Scan a site tag (or paste JSON) first."); return; }
   const hours = Number(hoursInput.value);
   const draws = effectiveDraws(hours);
 
   const results = [];
+  const adjTable = adjustedWeights(state.currentSite.possibleFinds);
   for (let i=0;i<draws;i++) {
-    const pick = weightedPick(state.currentSite.possibleFinds);
+    const pick = weightedPickAdjusted(adjTable);
     if (pick==="NothingFound") {
       results.push({name:"NothingFound"});
       continue;
     }
     const price = PRICE_TABLE[pick] ?? 500;
-    results.push({
-      id: uid(),
-      name: pick,
-      site: state.currentSite.site,
-      rarity: rarityFromPrice(price),
-      price
-    });
+    results.push({ id: uid(), name: pick, site: state.currentSite.site, rarity: rarityFromPrice(price), price });
   }
 
+  const digResults = document.getElementById("digResults");
   digResults.innerHTML = "";
   if (!results.some(r=>r.name!=="NothingFound")) {
     const div = document.createElement("div");
     div.className = "card";
-    div.innerHTML = `<div class="bad">You found nothing this time. Try more hours or different tools/site.</div>`;
+    div.innerHTML = `<div class="bad">You found nothing this time. Try more hours or a different site.</div>`;
     digResults.appendChild(div);
   } else {
     results.forEach(r=>{
@@ -458,22 +547,26 @@ $("#btn-dig").addEventListener("click", ()=>{
           <div class="row">
             <button data-act="sell">Sell (${fmtMoney(r.price)})</button>
             ${MUSEUM_YIELD[r.name] ? `<button class="primary" data-act="museum">Display</button>` : `<span class="small muted">Not displayable</span>`}
+            <button data-act="keep">Keep</button>
           </div>
         </div>
       `;
       div.addEventListener("click",(e)=>{
         const b = e.target.closest("button");
         if (!b) return;
+        div.querySelectorAll("button").forEach(btn => btn.disabled = true);
+
         if (b.dataset.act==="sell") {
           state.money += r.price;
         } else if (b.dataset.act==="museum") {
           state.museum.push({ id: uid(), name: r.name, site: r.site, perMin: MUSEUM_YIELD[r.name]||0 });
+        } else if (b.dataset.act==="keep") {
+          state.inventory.push({ id: r.id, name: r.name, site: r.site, rarity: r.rarity, price: r.price });
         }
         save(); refreshHUD();
         div.remove();
       });
       digResults.appendChild(div);
-      state.inventory.push(r);
     });
     save(); refreshHUD();
   }
@@ -483,7 +576,7 @@ $("#btn-dig").addEventListener("click", ()=>{
 // Web NFC support badge
 // -----------------------------
 function setSupportBadge(){
-  const sup = $("#support");
+  const sup = document.getElementById("support");
   if (!('NDEFReader' in window)) {
     sup.textContent = "Web NFC not available (Chrome on Android, HTTPS/localhost required)";
     sup.classList.add("warn");
@@ -501,24 +594,25 @@ async function loadSiteFromJSONText(text) {
   try {
     const obj = JSON.parse(text);
     if (!obj.site && !obj.t) throw new Error("Missing fields");
-    // route here for non-site tags too
     if (obj.t) { await routeControlTag(obj, text); return; }
     if (!obj.possibleFinds) throw new Error("No possibleFinds in site JSON");
+    const ok = await ensurePermitForSite(obj);
+    if (!ok) return;
     state.currentSite = obj;
     save(); refreshHUD();
     alert("Loaded site: " + (state.currentSite?.site || "unknown"));
   } catch (e) {
-    alert("Invalid JSON\\n" + e);
+    alert("Invalid JSON\n" + e);
   }
 }
-$("#btn-load-json").addEventListener("click", ()=>{
-  const txt = $("#manualJson").value.trim();
+document.getElementById("btn-load-json").addEventListener("click", ()=>{
+  const txt = document.getElementById("manualJson").value.trim();
   if (!txt) return alert("Paste JSON first.");
   loadSiteFromJSONText(txt);
 });
 
 // -----------------------------
-// NFC read helpers
+// NFC read & write helpers
 // -----------------------------
 async function ndefReadOnce(){
   const ndef = new NDEFReader();
@@ -542,13 +636,13 @@ async function ndefWriteText(text){
 }
 
 // -----------------------------
-// Control tags: seed/join/results
+// Control tags: seed/join/results (no permits required)
 // -----------------------------
 function handleGameSeed(obj){
   state.game.gameId = obj.game_id || null;
   state.game.rules = obj;
   save(); refreshHUD();
-  alert("Game seed loaded.\\nGame ID: " + state.game.gameId);
+  alert("Game seed loaded.\nGame ID: " + state.game.gameId);
 }
 
 async function handleGameJoin(rawText){
@@ -575,11 +669,11 @@ async function handleGameJoin(rawText){
 function buildSubmission(){
   const money = Math.round(state.money);
   const museumPerMin = state.museum.reduce((a,m)=>a+(m.perMin||0),0);
-  const findsSold = 0; // could be tracked if needed
+  const findsSold = 0;
   const findsDisplayed = state.museum.length;
   const raresFound = state.inventory.filter(i=>i.rarity==="Rare"||i.rarity==="Legendary").length;
-  const siteScans = 0; // increment in scan handler if desired
-  const turnsUsed = 0; // increment per dig if desired
+  const siteScans = 0;
+  const turnsUsed = 0;
   return {
     player_id: state.game.playerId,
     device_hash: state.game.deviceHash,
@@ -593,11 +687,7 @@ function finalizeResultsFromSubmissions(submissions, metric="money"){
   const placements = [...submissions]
     .sort((a,b)=>(b[metric]||0)-(a[metric]||0))
     .map((s, i)=>({rank:i+1, player_id:s.player_id, [metric]:s[metric]}));
-  return {
-    ranking_metric: metric,
-    placements,
-    finalized_at: Math.floor(Date.now()/1000)
-  };
+  return { ranking_metric: metric, placements, finalized_at: Math.floor(Date.now()/1000) };
 }
 
 async function handleGameResults(rawText, mode="auto"){
@@ -627,10 +717,7 @@ async function handleGameResults(rawText, mode="auto"){
   } else if (obj.phase === "finalized"){
     const me = obj.submissions.find(s=>s?.device_hash===state.game.deviceHash);
     const top = obj.results?.placements?.[0];
-    alert(
-      "Winner: " + (top?.player_id||"unknown") + "\\n" +
-      "Your money: " + (me?.money ?? "?")
-    );
+    alert("Winner: " + (top?.player_id||"unknown") + "\nYour money: " + (me?.money ?? "?"));
   } else {
     alert("Unknown results phase.");
   }
@@ -640,15 +727,75 @@ async function routeControlTag(obj, rawText){
   if (obj.t === "game_seed") return handleGameSeed(obj);
   if (obj.t === "game_join") return handleGameJoin(rawText);
   if (obj.t === "game_results") return handleGameResults(rawText /*, "finalize"*/);
-  // otherwise treat as site
+  // Otherwise treat as site (permits required)
+  const ok = await ensurePermitForSite(obj);
+  if (!ok) return;
   state.currentSite = obj;
   save(); refreshHUD();
 }
 
 // -----------------------------
+// Permit system (base vs DLC, first free)
+// -----------------------------
+function siteKeyFromObj(obj){ return obj.tag_id || obj.site || obj.formation || "unknown"; }
+function isDLCFromObj(obj){ return !!obj.expansion || (obj.tag_id && obj.tag_id.startsWith("DLC-")); }
+function formatPermitPrice(amount){ return "$" + Math.round(amount).toLocaleString(); }
+function nextBasePermitPrice(){ return state.permitPriceBase; }
+function nextDLCPermitPrice(){ return state.permitPriceBase * 2; }
+function bumpPermitPrice(){ state.permitPriceBase = Math.round(state.permitPriceBase * 1.10); }
+function hasPermitFor(key){ return !!state.permits[key]; }
+function totalPermitsOwned(){ return Object.keys(state.permits||{}).length; }
+
+function ensurePermitForSite(siteObj){
+  const key = siteKeyFromObj(siteObj);
+  if (hasPermitFor(key)) return Promise.resolve(true);
+
+  return new Promise((resolve)=>{
+    const modal = document.getElementById("permitModal");
+    const txt = document.getElementById("permitText");
+    const btnBuy = document.getElementById("permitBuy");
+    const btnCancel = document.getElementById("permitCancel");
+
+    const isDLC = isDLCFromObj(siteObj);
+    let price = (totalPermitsOwned() === 0) ? 0 : (isDLC ? nextDLCPermitPrice() : nextBasePermitPrice());
+    const firstFreeNote = (price === 0) ? '<br><b class="found">First permit is free</b>' : "";
+    txt.innerHTML = `You need a permit to excavate <b>${siteObj.site || siteObj.formation || "this area"}</b>.<br>` +
+                    `Permit type: <b>${isDLC ? "DLC area" : "Base area"}</b><br>` +
+                    `Cost: <b>${formatPermitPrice(price)}</b>${firstFreeNote}<br>` +
+                    `<span class="muted small">Note: The price for the next permit increases by 10% after any purchase.</span>`;
+
+    function close(res){ modal.style.display = "none"; btnBuy.onclick = null; btnCancel.onclick = null; resolve(res); }
+    btnCancel.onclick = ()=> close(false);
+    btnBuy.onclick = ()=>{
+      if (state.money < price){ alert("Not enough money for this permit."); return; }
+      if (price > 0) { state.money -= price; }
+      state.permits[key] = { purchased_at: Date.now(), dlc: isDLC };
+      state.permitsPurchasedCount = (state.permitsPurchasedCount||0) + 1;
+      if (price > 0) bumpPermitPrice();
+      save(); refreshHUD();
+      close(true);
+    };
+    modal.style.display = "flex";
+  });
+}
+
+// -----------------------------
+// New Game (reset all data and return to pre-join)
+// -----------------------------
+document.getElementById("btn-newgame").addEventListener("click", ()=>{
+  if (!confirm("Start a NEW GAME? This clears all money, items, permits, museum, and game IDs.")) return;
+  try {
+    localStorage.removeItem("fdg_state");
+    localStorage.removeItem("fdg_player_id");
+    localStorage.removeItem("fdg_device_hash");
+  } catch(e){}
+  location.reload();
+});
+
+// -----------------------------
 // Scan button (routes by tag type)
 // -----------------------------
-$("#btn-scan").addEventListener("click", async ()=>{
+document.getElementById("btn-scan").addEventListener("click", async ()=>{
   if (!('NDEFReader' in window)) { alert("Web NFC not supported in this browser."); return; }
   if (!window.isSecureContext) { alert("Open over HTTPS or http://localhost for Web NFC."); return; }
   try {
